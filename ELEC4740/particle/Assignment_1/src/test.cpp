@@ -189,6 +189,7 @@ void loop()
 	if (duty_cycle_overide != 0){
 		duty_cycle = duty_cycle_overide;
 	}
+	Log.info("Duty_Cycle = %d",duty_cycle);
 	analogWrite(ledPinW,duty_cycle);
 
 	// READING

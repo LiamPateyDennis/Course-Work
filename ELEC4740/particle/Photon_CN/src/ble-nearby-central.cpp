@@ -7,23 +7,31 @@
 
 LiquidCrystal_I2C *lcd;
 
+
+SerialLogHandler LogHandler;
 // This example does not require the cloud so you can run it in manual mode or
 // normal cloud-connected mode
 // SYSTEM_MODE(MANUAL);
 const BleUuid serviceUuid("7828f55d-c04c-49e8-86e9-8f1362755dc7");
 const BleUuid rxUuid("75c14d44-1b11-4514-b221-df15fc88050f");
 const BleUuid txUuid("10fcd87a-8601-484e-829d-d114a40a8ba6");
+const BleUuid serviceUuid2("bfc37fc6-64b1-4f2d-a3e5-c0df90bd5cdd");
+const BleUuid txUuid2("e503d4f7-ad9a-4131-a192-7150b3a7fc78");
+const BleUuid rxUuid2("06ddddf7-e00d-4ee8-83eb-bb7317c8589b");
 
-SerialLogHandler logHandler(LOG_LEVEL_TRACE);
+
 
 const size_t UART_TX_BUF_SIZE = 20;
-const size_t SCAN_RESULT_COUNT = 20;
+const size_t SCAN_RESULT_COUNT = 50;
 
 BleScanResult scanResults[SCAN_RESULT_COUNT];
 
 BleCharacteristic peerTxCharacteristic;
 BleCharacteristic peerRxCharacteristic;
 BlePeerDevice peer;
+BleCharacteristic peerTxCharacteristic2;
+BleCharacteristic peerRxCharacteristic2;
+BlePeerDevice peer2;
 
 class MyTimer {
 public:
@@ -72,6 +80,7 @@ size_t txLen = 0;
 
 uint16_t counting;
 uint8_t duty_cycle_overide;
+uint8_t duty_cycle_overide2;
 
 const unsigned long SCAN_PERIOD_MS = 2000;
 unsigned long lastScan = 0;
@@ -96,6 +105,7 @@ uint16_t sound;
 uint8_t offset;
 uint8_t debounce;
 uint8_t EMERGENCY_NOTIFY = 0;
+uint16_t EMERGENCY_NOTIFY_2 = 0;
 uint8_t return_button = 0;
 
 
@@ -119,6 +129,28 @@ uint8_t cross[8] = {
   0b11011,
   0b10001,
   0b00000
+};
+
+uint8_t degrees[8] = {
+  0b00110,
+  0b01001,
+  0b01001,
+  0b00110,
+  0b00000,
+  0b00000,
+  0b00000,
+  0b00000
+};
+
+uint8_t celcius[8] = {
+  0b01110,
+  0b10001,
+  0b10000,
+  0b10000,
+  0b10000,
+  0b10000,
+  0b10001,
+  0b01110
 };
 
 int LED1G = D3;
@@ -153,8 +185,21 @@ void onDataReceived(const uint8_t* data, size_t len, const BlePeerDevice& peer, 
 	memcpy(&lux,&data[0],4);
 	memcpy(&movement,&data[4],2);
 	memcpy(&EMERGENCY_NOTIFY,&data[6],1);
+	led1 = G;
 	// Log.info("movement = %d",movement);
-	Log.info("%d",EMERGENCY_NOTIFY);
+	// Log.info("%d",EMERGENCY_NOTIFY);
+}
+
+void onDataReceived2(const uint8_t* data, size_t len, const BlePeerDevice& peer, void* context) {
+    
+	// TOMS CODE
+	memcpy(&temp,&data[0],4);
+	memcpy(&sound,&data[4],2);
+	memcpy(&EMERGENCY_NOTIFY_2,&data[6],2);
+	led2 = G;
+	// Log.info("IS this bruh");
+
+
 }
 
 
@@ -175,6 +220,8 @@ void setup() {
 	lcd->backlight();
 	lcd->clear();
 
+	lcd->load_custom_character(3, celcius);
+	lcd->load_custom_character(2, degrees);
 	lcd->load_custom_character(1, tick);
 	lcd->load_custom_character(0, cross);
 
@@ -192,6 +239,7 @@ void setup() {
 #endif
 
 	peerTxCharacteristic.onDataReceived(onDataReceived, &peerTxCharacteristic);
+	peerTxCharacteristic2.onDataReceived(onDataReceived2, &peerTxCharacteristic2);
 }
 
 void loop() {
@@ -199,22 +247,26 @@ void loop() {
 
 	// BLUETOOTH TRANSMITTING
 	if (BLE.connected()) {
+
+		//SN1 TRANSMIT
 		uint8_t txBuf[UART_TX_BUF_SIZE];
 		size_t txLen = 0;
 		// txBuf[0] = CANCEL_EMERGENCY_NOTIFY;
 		memcpy(&txBuf,&return_button,1);
 		memcpy(&txBuf[1],&duty_cycle_overide,1);
 		txLen+=1;
-		
 		// CHECK
 		counting++;
 		if (counting >= 3000) {
 			Log.info("Bluetooth Working");
 			counting = 0;
 		}
-		led1 = G;
         peerRxCharacteristic.setValue(txBuf,2);
 
+		memcpy(&txBuf,&return_button,1);
+		memcpy(&txBuf[1],&duty_cycle_overide2,1);
+		peerRxCharacteristic2.setValue(txBuf,2);
+		
 		if (return_button == 1){
 			Log.info("Sending Return Button");
 			return_button = 0;
@@ -245,14 +297,23 @@ void loop() {
 							// Could do this instead, but since the names are not as standardized, UUIDs are better
 							// peer.getCharacteristicByDescription(peerTxCharacteristic, "tx");
 						}
-						break;
+						
 					}
+					if (svcCount > 0 && foundServiceUuid == serviceUuid2) {
+						peer2 = BLE.connect(scanResults[ii].address());
+						if (peer2.connected()) {
+							peer2.getCharacteristicByUUID(peerTxCharacteristic2, txUuid2);
+							peer2.getCharacteristicByUUID(peerRxCharacteristic2, rxUuid2);
+							
+							// Could do this instead, but since the names are not as standardized, UUIDs are better
+							// peer.getCharacteristicByDescription(peerTxCharacteristic, "tx");
+						}
 				}
 			}
     	}
 
     }
-
+	}
 	// LOGIC FUNCTIONS
 	// if(button_SN1 == 1){
 	// 	led1 = FR;
@@ -285,27 +346,33 @@ void loop() {
 	} else {
 		duty_cycle_overide = 0;
 	}
+	if (temp > 40) {
+		duty_cycle_overide2 = 1;
+	} else {
+		duty_cycle_overide2 = 0;
+	}
 	
 	// LCD Screen Display
 	if (refresh_lcd == true){
 		char buffer[16];
 		// lcd->print("")
 		lcd->setCursor(0,0);
-		snprintf(buffer, sizeof(buffer), "Movement:");
+		snprintf(buffer, sizeof(buffer), "Temp:%.2f", temp);
 		lcd->print(buffer);
-		lcd->setCursor(10,0);
-		if (movement >= 2000) {
-			lcd->write(1);
-		} else {
-			lcd->write(0);
-		}
+		// Log.info("%d",sizeof(buffer));
+		lcd->setCursor(11,0);
+		lcd->write(2);
+		lcd->setCursor(12,0);
+		lcd->write(3);
+
+		// lcd->setCursor(sizeof(buffer)+1,0);
 		// Print to display
 		lcd->setCursor(0,1);
 		// char buffer[16]; // Adjust buffer size as needed
 		if (lux > 0) {
-		snprintf(buffer, sizeof(buffer), "Lux:%.2f", lux);
+		snprintf(buffer, sizeof(buffer), "Lux:%.2f |x", lux);
 		} else {
-		snprintf(buffer, sizeof(buffer), "Lux: %.2f", 0.00);	
+		snprintf(buffer, sizeof(buffer), "Lux:%.2f |x", 0.00);	
 		}
 		lcd->print(buffer);
 		// delay(100);

@@ -4,7 +4,7 @@
     "files.associations": {
         "*.ino": "cpp"
     },
-    "particle.firmwareVersion": "5.2.0",
+    "particle.firmwareVersion": "5.8.0",
     "particle.targetPlatform": "p2",
     "particle.targetDevice": "p2_garbage"
 }
